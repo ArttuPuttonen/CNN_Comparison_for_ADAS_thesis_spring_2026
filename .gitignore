@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Jupyter
+.ipynb_checkpoints
+
+# Env
+.env
+.venv
+venv/
+
+# Mac
+.DS_Store
+
+# Data & models
+data/
+outputs/
+models/
+
+# Logs
+*.log
+
+# Docker runtime stuff (optional)
+*.pid
