@@ -24,3 +24,5 @@ models/
 
 # Docker runtime stuff (optional)
 *.pid
+
+__pycache__/

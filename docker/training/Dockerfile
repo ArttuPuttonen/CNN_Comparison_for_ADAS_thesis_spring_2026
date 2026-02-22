@@ -1,10 +1,9 @@
-FROM tensorflow/tensorflow:2.15.0-gpu
+FROM tensorflow/tensorflow:2.20.0-gpu
 
 WORKDIR /workspace
 
-COPY requirements.txt /workspace/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir pandas numpy matplotlib
 
-COPY . /workspace
+COPY train.py /workspace/train.py
 
 CMD ["python", "train.py"]
