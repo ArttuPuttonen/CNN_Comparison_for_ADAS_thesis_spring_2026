@@ -2,24 +2,17 @@ FROM tensorflow/tensorflow:2.20.0-gpu
 
 WORKDIR /workspace
 
-# 🔴 TÄMÄ ON SE RATKAISEVA OSA
-# TensorFlow GPU tarvitsee nämä user-space kirjastot
+USER root
+
 RUN apt-get update && apt-get install -y \
-    libcudnn9-cuda-13 \
+    libcudnn9-cuda-12 \
     libnccl2 \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Python kirjastot
-RUN pip install --no-cache-dir \
-    pandas \
-    numpy \
-    matplotlib
+ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
-# Kopioi training script
+RUN pip install --no-cache-dir pandas numpy matplotlib
+
 COPY train.py /workspace/train.py
 
 CMD ["python", "train.py"]
