@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { predictImage, type PredictResponse } from "./api/client";
-import ImageUpload from "./components/ImageUpload";
+import ImageUpload, { type CropArea } from "./components/ImageUpload";
 import InferenceCharts from "./components/InferenceCharts";
 import ResultsTable from "./components/ResultsTable";
 
@@ -9,6 +9,7 @@ export default function App() {
   const [result, setResult] = useState<PredictResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cropArea, setCropArea] = useState<CropArea | null>(null);
 
   const previewUrl = useMemo(() => {
     if (!selectedFile) {
@@ -27,8 +28,53 @@ export default function App() {
 
   const handleFileChange = (file: File | null) => {
     setSelectedFile(file);
+    setCropArea(null);
     setResult(null);
     setError(null);
+  };
+
+  const createCroppedFile = async (sourceFile: File, crop: CropArea): Promise<File> => {
+    const imageUrl = URL.createObjectURL(sourceFile);
+    try {
+      const imageElement = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("Failed to load selected image for cropping."));
+        image.src = imageUrl;
+      });
+
+      const sx = Math.round(crop.x * imageElement.naturalWidth);
+      const sy = Math.round(crop.y * imageElement.naturalHeight);
+      const sw = Math.max(1, Math.round(crop.width * imageElement.naturalWidth));
+      const sh = Math.max(1, Math.round(crop.height * imageElement.naturalHeight));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = sw;
+      canvas.height = sh;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        throw new Error("Failed to create canvas context for crop.");
+      }
+
+      context.drawImage(imageElement, sx, sy, sw, sh, 0, 0, sw, sh);
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((resultBlob) => {
+          if (!resultBlob) {
+            reject(new Error("Failed to export cropped image."));
+            return;
+          }
+          resolve(resultBlob);
+        }, sourceFile.type || "image/jpeg");
+      });
+
+      return new File([blob], `crop_${sourceFile.name}`, {
+        type: blob.type || sourceFile.type,
+        lastModified: Date.now()
+      });
+    } finally {
+      URL.revokeObjectURL(imageUrl);
+    }
   };
 
   const handleRunInference = async () => {
@@ -40,7 +86,10 @@ export default function App() {
     setError(null);
 
     try {
-      const data = await predictImage(selectedFile);
+      const inferenceFile = cropArea
+        ? await createCroppedFile(selectedFile, cropArea)
+        : selectedFile;
+      const data = await predictImage(inferenceFile);
       setResult(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unexpected error";
@@ -64,7 +113,9 @@ export default function App() {
           previewUrl={previewUrl}
           selectedFile={selectedFile}
           loading={loading}
+          cropArea={cropArea}
           onFileChange={handleFileChange}
+          onCropAreaChange={setCropArea}
           onRunInference={handleRunInference}
         />
 

@@ -81,17 +81,26 @@ def prepare_datasets() -> Tuple[tf.data.Dataset, tf.data.Dataset, List[str]]:
             f"Expected dataset folders at '{TRAIN_DIR}' and '{TEST_DIR}', but one or both are missing."
         )
 
+    train_class_dirs = sorted(path.name for path in TRAIN_DIR.iterdir() if path.is_dir())
+    if not train_class_dirs:
+        raise FileNotFoundError(f"No class folders found in '{TRAIN_DIR}'.")
+
+    # Keep class indexing deterministic and human-intuitive for numeric class names.
+    if all(name.isdigit() for name in train_class_dirs):
+        class_names = sorted(train_class_dirs, key=lambda name: int(name))
+    else:
+        class_names = sorted(train_class_dirs)
+
     train_ds = tf.keras.utils.image_dataset_from_directory(
         TRAIN_DIR,
         labels="inferred",
         label_mode="int",
+        class_names=class_names,
         image_size=IMG_SIZE,
         batch_size=BATCH_SIZE,
         shuffle=True,
         seed=SEED,
     )
-
-    class_names = train_ds.class_names
 
     test_ds = tf.keras.utils.image_dataset_from_directory(
         TEST_DIR,

@@ -1,6 +1,7 @@
 export type PredictionItem = {
   model: string;
   class_id: string;
+  class_name?: string;
   confidence: string;
   inference_time_ms: string;
 };

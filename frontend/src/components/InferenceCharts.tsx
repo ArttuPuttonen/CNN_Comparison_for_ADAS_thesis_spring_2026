@@ -16,7 +16,7 @@ type InferenceChartsProps = {
 
 type ChartDataPoint = {
   model: string;
-  confidence: number;
+  confidencePercent: number;
   inferenceTimeMs: number;
 };
 
@@ -32,10 +32,15 @@ function formatConfidence(value: number): string {
   return `${value.toFixed(2)}%`;
 }
 
+function toPercentConfidence(value: string): number {
+  const parsed = toNumber(value);
+  return parsed <= 1 ? parsed * 100 : parsed;
+}
+
 export default function InferenceCharts({ predictions }: InferenceChartsProps) {
   const chartData: ChartDataPoint[] = predictions.map((item) => ({
     model: item.model,
-    confidence: toNumber(item.confidence),
+    confidencePercent: toPercentConfidence(item.confidence),
     inferenceTimeMs: toNumber(item.inference_time_ms)
   }));
 
@@ -74,9 +79,9 @@ export default function InferenceCharts({ predictions }: InferenceChartsProps) {
             <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="model" />
-              <YAxis />
+              <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
               <Tooltip formatter={(value) => formatConfidence(Number(value))} />
-              <Bar dataKey="confidence" radius={[6, 6, 0, 0]}>
+              <Bar dataKey="confidencePercent" radius={[6, 6, 0, 0]}>
                 {chartData.map((entry, index) => (
                   <Cell
                     key={`confidence-bar-${entry.model}`}
