@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y \
 
 ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
-RUN pip install --no-cache-dir pandas numpy matplotlib
+COPY requirements.txt /workspace/requirements.txt
+RUN pip install --no-cache-dir -r /workspace/requirements.txt
 
 COPY train.py /workspace/train.py
 

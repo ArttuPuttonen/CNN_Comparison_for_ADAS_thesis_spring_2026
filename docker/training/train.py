@@ -10,6 +10,8 @@ Outputs:
     - TensorFlow SavedModel
     - history.json
     - metrics.txt
+    - predictions.csv
+  /outputs/models/class_names.json
   /outputs/models/comparison.csv
 """
 
@@ -50,8 +52,8 @@ INPUT_SHAPE: Tuple[int, int, int] = (224, 224, 3)
 BATCH_SIZE: int = 64
 NUM_CLASSES: int = 43
 
-INITIAL_EPOCHS: int = 10
-FINE_TUNE_EPOCHS: int = 10
+INITIAL_EPOCHS: int = 15
+FINE_TUNE_EPOCHS: int = 15
 INITIAL_LR: float = 1e-3
 FINE_TUNE_LR: float = 1e-5
 UNFREEZE_TOP_LAYERS: int = 30
@@ -124,6 +126,77 @@ def count_dataset_images(dataset: tf.data.Dataset) -> int:
             lambda acc, batch: acc + tf.cast(tf.shape(batch[0])[0], tf.int64),
         ).numpy()
     )
+
+
+def extract_labels(dataset: tf.data.Dataset) -> np.ndarray:
+    """Collect integer labels from a batched (images, labels) dataset."""
+    all_labels: List[np.ndarray] = []
+    for _, labels in dataset:
+        all_labels.append(labels.numpy())
+
+    if not all_labels:
+        return np.array([], dtype=np.int64)
+    return np.concatenate(all_labels).astype(np.int64)
+
+
+def save_class_names(class_names: List[str]) -> None:
+    """Persist class index mapping used during training/evaluation."""
+    OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+    with (OUTPUT_ROOT / "class_names.json").open("w", encoding="utf-8") as f:
+        json.dump(class_names, f, indent=2)
+
+
+def save_predictions(
+    model_dir: Path,
+    class_names: List[str],
+    true_labels: np.ndarray,
+    pred_labels: np.ndarray,
+    pred_confidences: np.ndarray,
+) -> None:
+    """Save per-sample predictions for downstream confusion/error analysis."""
+    if true_labels.size == 0 or pred_labels.size == 0:
+        return
+
+    if true_labels.shape[0] != pred_labels.shape[0]:
+        min_len = min(true_labels.shape[0], pred_labels.shape[0], pred_confidences.shape[0])
+        true_labels = true_labels[:min_len]
+        pred_labels = pred_labels[:min_len]
+        pred_confidences = pred_confidences[:min_len]
+
+    def label_to_name(label: int) -> str:
+        if 0 <= label < len(class_names):
+            return class_names[label]
+        return f"class_{label}"
+
+    output_path = model_dir / "predictions.csv"
+    fieldnames = [
+        "sample_index",
+        "true_label",
+        "pred_label",
+        "true_class",
+        "pred_class",
+        "correct",
+        "confidence",
+    ]
+    with output_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for idx, (y_true, y_pred, confidence) in enumerate(
+            zip(true_labels, pred_labels, pred_confidences)
+        ):
+            y_true_int = int(y_true)
+            y_pred_int = int(y_pred)
+            writer.writerow(
+                {
+                    "sample_index": idx,
+                    "true_label": y_true_int,
+                    "pred_label": y_pred_int,
+                    "true_class": label_to_name(y_true_int),
+                    "pred_class": label_to_name(y_pred_int),
+                    "correct": int(y_true_int == y_pred_int),
+                    "confidence": float(confidence),
+                }
+            )
 
 
 def get_model(model_name: str, num_classes: int) -> Tuple[tf.keras.Model, tf.keras.Model]:
@@ -236,7 +309,7 @@ def train_model(model_name: str) -> Dict[str, float]:
         metrics=["accuracy"],
     )
 
-    start_time = time.time()
+    start_time = time.perf_counter()
 
     history_frozen = model.fit(
         TRAIN_DS,
@@ -263,16 +336,20 @@ def train_model(model_name: str) -> Dict[str, float]:
         verbose=1,
     )
 
-    total_training_time = time.time() - start_time
+    total_training_time = time.perf_counter() - start_time
 
     eval_loss, eval_acc = model.evaluate(TEST_DS, verbose=0)
-    inference_start_time = time.time()
-    model.predict(TEST_DS, verbose=0)
-    total_inference_time = time.time() - inference_start_time
+    inference_start_time = time.perf_counter()
+    pred_probs = model.predict(TEST_DS, verbose=0)
+    total_inference_time = time.perf_counter() - inference_start_time
     inference_time_per_image = (
         total_inference_time / TEST_IMAGE_COUNT if TEST_IMAGE_COUNT > 0 else 0.0
     )
     param_count = int(model.count_params())
+
+    pred_labels = np.argmax(pred_probs, axis=1).astype(np.int64)
+    pred_confidences = np.max(pred_probs, axis=1).astype(np.float64)
+    true_labels = extract_labels(TEST_DS)
 
     merged_history = {
         key: history_frozen.history.get(key, []) + history_finetune.history.get(key, [])
@@ -291,6 +368,13 @@ def train_model(model_name: str) -> Dict[str, float]:
         f.write(f"training_time_seconds: {total_training_time:.2f}\n")
         f.write(f"parameter_count: {param_count}\n")
         f.write(f"inference_time_per_image_seconds: {inference_time_per_image:.8f}\n")
+    save_predictions(
+        model_dir=model_dir,
+        class_names=CLASS_NAMES,
+        true_labels=true_labels,
+        pred_labels=pred_labels,
+        pred_confidences=pred_confidences,
+    )
 
     return {
         "model_name": model_name,
@@ -337,6 +421,7 @@ def main() -> None:
     TRAIN_DS, TEST_DS, CLASS_NAMES = prepare_datasets()
     TEST_IMAGE_COUNT = count_dataset_images(TEST_DS)
     print(f"Detected {len(CLASS_NAMES)} classes.")
+    save_class_names(CLASS_NAMES)
 
     model_names = ["VGG16", "ResNet50", "MobileNetV3Small"]
     all_results: List[Dict[str, float]] = []

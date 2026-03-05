@@ -18,14 +18,17 @@ venv/
 data/
 outputs/
 models/
+reports/figures/
+reports/tables/
+reports/summary.csv
+reports/error_analysis.csv
+reports/top_confusions.csv
 
 # Logs
 *.log
 
 # Docker runtime stuff (optional)
 *.pid
-
-__pycache__/
 
 # Frontend
 frontend/node_modules/
