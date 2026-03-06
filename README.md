@@ -2,7 +2,9 @@
 
 This repository contains the implementation for a Finnish *Ammattikorkeakoulu* (University of Applied Sciences) thesis project.
 
-The project compares three CNN-based transfer learning models for traffic sign recognition:
+Thesis objective: identify the best-performing CNN architecture for traffic sign recognition using the German Traffic Sign Recognition Benchmark (GTSRB) dataset.
+
+The project compares three CNN-based transfer learning models:
 - `VGG16`
 - `ResNet50`
 - `MobileNetV3Small`
@@ -15,14 +17,14 @@ The repository includes:
 
 ## Thesis Scope
 
-The thesis evaluates model quality and practical deployment tradeoffs:
+The thesis evaluates which model is the best overall choice on GTSRB by comparing:
 - classification accuracy and loss
 - training time
 - parameter count
 - inference latency
 - class-level error patterns (confusion matrices and top confusions)
 
-Dataset assumptions in this project follow a 43-class traffic sign setup.
+Dataset: German Traffic Sign Recognition Benchmark (GTSRB), 43 traffic sign classes.
 
 ## Repository Structure
 
@@ -72,7 +74,7 @@ data/
 
 Notes:
 - `Train` and `Test` must contain the same class directories.
-- Current training script expects `43` classes.
+- Current training script expects `43` classes (GTSRB).
 
 ## Training (Docker)
 
